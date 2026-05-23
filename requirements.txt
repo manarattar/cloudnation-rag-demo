@@ -1,0 +1,14 @@
+# Demo runtime dependencies (all that demo/app.py needs)
+qdrant-client>=1.9.1
+sentence-transformers>=3.0.1
+openai>=1.35.0
+fakeredis>=2.23.2
+numpy>=1.26.4
+streamlit>=1.36.0
+pydantic>=2.7.4
+ollama>=0.3.1
+
+# Architecture module dependencies (module3_agentic_rag, etc. — not needed for the demo)
+# langchain-core>=0.2.22,<0.3
+# langgraph>=0.1.19
+# langchain-openai>=0.1.14

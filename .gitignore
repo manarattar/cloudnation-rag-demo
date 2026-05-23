@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Secrets — never commit keys
+.env
+*.env
+secrets.toml
+.streamlit/secrets.toml
+
+# Streamlit cache
+.streamlit/cache/
+
+# Sentence-transformers model cache
+.cache/
+
+# Orchestrator working files
+.orchestrator/
+
+# OS
+.DS_Store
+Thumbs.db
