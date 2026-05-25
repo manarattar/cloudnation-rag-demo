@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st  # noqa: E402
 
 import demo.config as _cfg  # noqa: E402
-from demo.pipeline import (cache_store, ingest_documents,  # noqa: E402
-                           is_collection_ready, query_streaming)
+from demo.pipeline import ingest_documents  # noqa: E402
+from demo.pipeline import cache_store, is_collection_ready, query_streaming
 from demo.sample_documents import DOCUMENTS  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -283,13 +283,22 @@ with st.sidebar:
     )
 
     if "Groq" in provider:
-        groq_key = st.text_input(
-            "Groq API key",
-            value=_cfg.LLM_API_KEY,
-            type="password",
-            placeholder="gsk_…",
-            help="Free key at console.groq.com — 30 req/min on free tier.",
-        )
+        _key_preconfigured = bool(_cfg.LLM_API_KEY)
+        if _key_preconfigured:
+            st.success("Groq configured ✓", icon="✅")
+            groq_key = _cfg.LLM_API_KEY
+        else:
+            groq_key = st.text_input(
+                "Groq API key",
+                value="",
+                type="password",
+                placeholder="gsk_…",
+                help="Free key at console.groq.com — 30 req/min on free tier.",
+            )
+            if groq_key:
+                st.success("Groq configured ✓")
+            else:
+                st.warning("Enter your Groq API key above.")
         groq_model = st.selectbox(
             "Model",
             [
@@ -303,10 +312,6 @@ with st.sidebar:
         _cfg.LLM_BASE_URL = "https://api.groq.com/openai/v1"
         _cfg.LLM_API_KEY = groq_key
         _cfg.LLM_MODEL = groq_model
-        if groq_key:
-            st.success("Groq configured ✓")
-        else:
-            st.warning("Enter your Groq API key above.")
     else:
         ollama_models = _get_ollama_models()
         if ollama_models:
@@ -461,7 +466,7 @@ st.markdown(
   <div class="hero-pills">
     <span class="hero-pill">Qdrant in-memory</span>
     <span class="hero-pill">sentence-transformers</span>
-    <span class="hero-pill">Ollama LLM</span>
+    <span class="hero-pill">Groq LPU · Ollama</span>
     <span class="hero-pill">CRAG pipeline</span>
     <span class="hero-pill">semantic cache</span>
   </div>
@@ -588,7 +593,8 @@ with tab_chat:
             # llama3.1:8b on CPU takes ~20s TTFT; drain generator inside a
             # spinner so the UI stays animated instead of appearing frozen.
             if result.get("stream_gen") is not None:
-                with st.spinner("Generating answer with Ollama…"):
+                _provider_label = "Groq" if "groq" in _cfg.LLM_BASE_URL else "Ollama"
+                with st.spinner(f"Generating answer via {_provider_label}…"):
                     tokens: list[str] = list(result["stream_gen"])
                 answer = "".join(tokens).strip() or "*No response generated.*"
                 citations = result["out"].get("citations", [])

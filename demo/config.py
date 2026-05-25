@@ -4,16 +4,17 @@ import os
 # Switch to Ollama by setting LLM_BASE_URL=http://localhost:11434/v1
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 
-# API key: env var > Streamlit secrets > sidebar input (empty default)
-
 
 def _load_api_key() -> str:
+    """Load API key: env var → Streamlit secrets (cloud) → empty."""
     if key := os.getenv("LLM_API_KEY", ""):
+        return key
+    if key := os.getenv("GROQ_API_KEY", ""):
         return key
     try:
         import streamlit as st
 
-        return st.secrets.get("GROQ_API_KEY", "")
+        return st.secrets.get("GROQ_API_KEY", "") or st.secrets.get("LLM_API_KEY", "")
     except Exception:
         return ""
 
