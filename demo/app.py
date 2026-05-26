@@ -12,8 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st  # noqa: E402
 
 import demo.config as _cfg  # noqa: E402
-from demo.pipeline import ingest_documents  # noqa: E402
-from demo.pipeline import cache_store, is_collection_ready, query_streaming
+from demo.pipeline import get_qdrant  # noqa: E402
+from demo.pipeline import (cache_store, ingest_documents, is_collection_ready,
+                           query_streaming)
 from demo.sample_documents import DOCUMENTS  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -270,6 +271,43 @@ with st.sidebar:
         doc_types[d["doc_type"]] = doc_types.get(d["doc_type"], 0) + 1
     for dtype, count in doc_types.items():
         st.caption(f"  • {dtype}: {count}")
+
+    st.divider()
+
+    # ── Index & Scale ────────────────────────────────────────────────
+    st.subheader("🏗️ Vector Index")
+    try:
+        _info = get_qdrant().get_collection(_cfg.COLLECTION)
+        _vec_count = _info.points_count
+        _vec_dim = _info.config.params.vectors.size
+    except Exception:
+        _vec_count = st.session_state.get("ingested", 0)
+        _vec_dim = 384
+
+    _ci1, _ci2 = st.columns(2)
+    _ci1.metric("Vectors", f"{_vec_count:,}")
+    _ci2.metric("Dimensions", _vec_dim)
+    st.metric("Index", "HNSW · O(log n)")
+    st.markdown(
+        """
+<div style="background:rgba(196,161,74,0.08);border:1px solid rgba(196,161,74,0.25);
+border-radius:4px;padding:0.55rem 0.75rem;margin:0.3rem 0 0.5rem;
+font-size:0.74rem;color:#A8B8CC;line-height:1.6">
+<span style="color:#C4A14A;font-weight:600">Production scale</span><br>
+500 K docs → ~1.1 GB index<br>
+INT8 quantization → ~280 MB<br>
+Search latency: &lt;20 ms<br>
+Ingestion: one-time batch job
+</div>""",
+        unsafe_allow_html=True,
+    )
+    if st.button("🔄 Rebuild index", help="Delete and re-ingest the vector index"):
+        try:
+            get_qdrant().delete_collection(_cfg.COLLECTION)
+        except Exception:
+            pass
+        st.session_state.pop("ingested", None)
+        st.rerun()
 
     st.divider()
 

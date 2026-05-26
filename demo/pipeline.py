@@ -40,7 +40,12 @@ def get_embedder() -> SentenceTransformer:
 def get_qdrant() -> QdrantClient:
     global _qdrant
     if _qdrant is None:
-        _qdrant = QdrantClient(":memory:")
+        from demo.config import QDRANT_PATH
+
+        try:
+            _qdrant = QdrantClient(path=QDRANT_PATH)
+        except Exception:
+            _qdrant = QdrantClient(":memory:")
     return _qdrant
 
 

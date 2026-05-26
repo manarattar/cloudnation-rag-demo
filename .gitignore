@@ -19,6 +19,9 @@ secrets.toml
 # Streamlit cache
 .streamlit/cache/
 
+# Qdrant persistent index (pre-built on first run, not committed)
+qdrant_data/
+
 # Sentence-transformers model cache
 .cache/
 

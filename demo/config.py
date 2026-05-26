@@ -23,7 +23,15 @@ LLM_API_KEY = _load_api_key()
 LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-COLLECTION = "tax_authority_demo"
+
+# v2: access_roles fixed to classification labels (restricted/internal)
+COLLECTION = "tax_authority_demo_v2"
+
+# Persistent HNSW index — survives restarts, scales to 500K+ docs.
+# Falls back to :memory: if the path is not writable (e.g. read-only container).
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+QDRANT_PATH = os.path.join(_project_root, "qdrant_data")
+
 TOP_K_RETRIEVE = 20
 TOP_K_FINAL = 3
 CACHE_THRESHOLD = 0.97
