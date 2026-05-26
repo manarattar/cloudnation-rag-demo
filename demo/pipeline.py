@@ -270,9 +270,11 @@ def grade_retrieval(query: str, chunks: list[dict]) -> str:
 # Generation
 # ---------------------------------------------------------------------------
 
-GENERATION_PROMPT = """You are a precise Dutch tax authority assistant.
+GENERATION_PROMPT = """You are a precise assistant for the Dutch (Netherlands) tax authority.
 Answer the question COMPLETELY and DIRECTLY using ONLY the provided context.
 Rules:
+- Always answer in English.
+- Write all decimal numbers using period notation (e.g. 36.97%, not 36,97%).
 - Lead with the most important fact that directly answers the question.
 - Cover ALL relevant rates, thresholds, and rules mentioned in the context.
 - After every factual claim add an inline citation: [Document Title, Article].
@@ -454,8 +456,9 @@ def query(user_query: str, role: str = "helpdesk") -> dict:
         answer = NO_ANSWER_TEMPLATE.format(citation=closest)
         citations = [closest] if chunks else []
 
-    # 6. Cache the result
-    cache_store(query_vec, role, answer, citations)
+    # 6. Cache only successful results — don't propagate error strings
+    if not answer.startswith("LLM error"):
+        cache_store(query_vec, role, answer, citations)
 
     return {
         "answer": answer,

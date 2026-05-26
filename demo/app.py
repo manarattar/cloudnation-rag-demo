@@ -13,7 +13,8 @@ import streamlit as st  # noqa: E402
 
 import demo.config as _cfg  # noqa: E402
 from demo.pipeline import get_qdrant  # noqa: E402
-from demo.pipeline import (cache_store, ingest_documents, is_collection_ready,
+from demo.pipeline import ingest_documents  # noqa: E402
+from demo.pipeline import (cache_store, is_collection_ready, query,
                            query_streaming)
 from demo.sample_documents import DOCUMENTS  # noqa: E402
 
@@ -206,6 +207,44 @@ html, body, [data-testid="stApp"] { background: #F7F6F2 !important; }
     padding: 0.6rem 0;
     font-size: 0.9rem;
 }
+
+/* ── Classification stamp (diagonal banner on KB cards) ── */
+.card-wrap { position: relative; overflow: hidden; margin-bottom: 0.9rem; }
+.classified-stamp {
+    position: absolute; top: 14px; right: -22px;
+    padding: 2px 28px; transform: rotate(18deg);
+    font-size: 0.58rem; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    pointer-events: none; z-index: 10;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.stamp-restricted       { background: #C48000; color: #fff; }
+.stamp-legal_classified { background: #8B3000; color: #fff; }
+.stamp-fiod             { background: #8B0000; color: #fff; }
+
+/* ── Pipeline flow diagram ── */
+.flow-row { display:flex; align-items:center; gap:0; flex-wrap:wrap;
+            padding:0.5rem 0; margin-bottom:0.4rem; }
+.flow-node { padding:4px 11px; border-radius:4px; font-size:0.74rem;
+             font-weight:600; letter-spacing:0.02em; transition:all 0.2s; }
+.fn-pending { background:#EDEAE0; color:#AAA098; border:1px solid #D8D2C4; }
+.fn-active  { background:#FBF3E0; color:#7A5800; border:1px solid #D8B840;
+              box-shadow:0 0 0 2px rgba(196,161,74,0.3); }
+.fn-done    { background:#E6F4ED; color:#1A6B3A; border:1px solid #A8D8BC; }
+.flow-arrow { color:#C8C0B0; font-size:0.85rem; padding:0 4px; }
+
+/* ── Confidence badge ── */
+.conf-badge { display:inline-block; padding:2px 10px; border-radius:3px;
+              font-size:0.7rem; font-weight:700; letter-spacing:0.07em;
+              text-transform:uppercase; margin-bottom:0.4rem; }
+.conf-high   { background:#1A6B3A; color:#fff; }
+.conf-medium { background:#7A5800; color:#fff; }
+.conf-low    { background:#8B1A1A; color:#fff; }
+
+/* ── Score bar ── */
+.score-bar-wrap { background:#E8E4DC; border-radius:3px; height:5px;
+                  margin:3px 0 1px; }
+.score-bar-fill { height:5px; border-radius:3px; background:#1E3A5F; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -225,6 +264,12 @@ if "ingested" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
+
+if "eval_results" not in st.session_state:
+    st.session_state["eval_results"] = None
+
+if "last_query" not in st.session_state:
+    st.session_state["last_query"] = ""
 
 if "stats" not in st.session_state:
     st.session_state["stats"] = {"total": 0, "cache_hits": 0, "latencies": []}
@@ -447,6 +492,22 @@ def _render_meta(meta: dict) -> None:
     citations = meta.get("citations", [])
     chunks = meta.get("chunks", [])
 
+    # ── Confidence badge ─────────────────────────────────────────────
+    top_score = chunks[0].get("score", 0) if chunks else 0.0
+    if grade in ("irrelevant", "ambiguous") or top_score < 0.2:
+        conf_level, conf_cls = "LOW", "conf-low"
+    elif top_score >= 0.5:
+        conf_level, conf_cls = "HIGH", "conf-high"
+    else:
+        conf_level, conf_cls = "MEDIUM", "conf-medium"
+    if cache_hit:
+        conf_level, conf_cls = "CACHED", "conf-high"
+
+    st.markdown(
+        f'<span class="conf-badge {conf_cls}">Confidence: {conf_level}</span>',
+        unsafe_allow_html=True,
+    )
+
     col1, col2, col3 = st.columns(3)
     col1.metric("Retrieval grade", GRADE_BADGE.get(grade, grade))
     col2.metric("Cache", "HIT ⚡" if cache_hit else "MISS")
@@ -454,8 +515,23 @@ def _render_meta(meta: dict) -> None:
 
     if citations:
         with st.expander("📚 Sources cited", expanded=False):
-            for c in citations:
-                st.markdown(f"- `{c}`")
+            if chunks and not cache_hit:
+                # Show score bars alongside citations
+                chunk_by_cite = {c.get("citation", ""): c for c in chunks}
+                for c in citations:
+                    sc = chunk_by_cite.get(c, {}).get("score", 0.0)
+                    bar_w = min(int(sc * 100), 100)
+                    st.markdown(
+                        f"`{c}`"
+                        f'<div class="score-bar-wrap">'
+                        f'<div class="score-bar-fill" style="width:{bar_w}%"></div>'
+                        f"</div>"
+                        f'<small style="color:#888880">relevance score: {sc:.3f}</small>',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                for c in citations:
+                    st.markdown(f"- `{c}`")
 
     if chunks and not cache_hit:
         with st.expander("🔍 Retrieved chunks", expanded=False):
@@ -481,8 +557,23 @@ def _kb_card(doc: dict) -> str:
         snippet += "…"
     title = doc.get("doc_title", "Untitled").replace("<", "&lt;")
     dtype = doc.get("doc_type", "").replace("_", " ").title()
-    return (
-        f'<div class="legal-card">'
+    _stamp_cls = {
+        "restricted": "stamp-restricted",
+        "legal_classified": "stamp-legal_classified",
+        "fiod": "stamp-fiod",
+    }.get(top, "")
+    _stamp_label = {
+        "restricted": "Restricted",
+        "legal_classified": "Classified",
+        "fiod": "FIOD Only",
+    }.get(top, "")
+    _stamp_html = (
+        f'<div class="classified-stamp {_stamp_cls}">{_stamp_label}</div>'
+        if _stamp_cls
+        else ""
+    )
+    card_inner = (
+        f'<div class="legal-card" style="margin-bottom:0">'
         f'<div class="legal-card-title">{icon} {title}</div>'
         f'<div class="legal-card-body">{snippet}</div>'
         f'<div class="legal-card-meta">'
@@ -490,6 +581,172 @@ def _kb_card(doc: dict) -> str:
         f'<span style="color:#888880;font-size:0.73rem;margin-left:4px">{dtype}</span>'
         f"</div></div>"
     )
+    return f'<div class="card-wrap">{card_inner}{_stamp_html}</div>'
+
+
+# ---------------------------------------------------------------------------
+# Evaluation golden test cases (inline — mirrors run_tests.py CASES)
+# ---------------------------------------------------------------------------
+
+EVAL_CASES = [
+    (
+        "rbac_block",
+        "Tell me about FIOD fraud indicators and VAT carousel schemes.",
+        "helpdesk",
+        ["carrousel", "fraude", "50.000"],
+        False,
+        "RBAC: helpdesk blocked from FIOD doc",
+    ),
+    (
+        "rbac_allow",
+        "Tell me about FIOD fraud indicators and VAT carousel schemes.",
+        "fiod",
+        ["btw", "carrousel", "fraude"],
+        True,
+        "RBAC: fiod sees FIOD classified doc",
+    ),
+    (
+        "box1_rates",
+        "What is the Box 1 income tax rate for 2024?",
+        "helpdesk",
+        ["36.97", "49.50", "75"],
+        True,
+        "Box 1 tax rates (36.97% / 49.50%)",
+    ),
+    (
+        "box1_cache",
+        "What is the Box 1 income tax rate for 2024?",
+        "helpdesk",
+        ["36.97", "49.50"],
+        True,
+        "Box 1 cache hit",
+    ),
+    (
+        "vat_rates",
+        "What are the VAT (BTW) rates in the Netherlands?",
+        "helpdesk",
+        ["21", "9", "export"],
+        True,
+        "VAT rates 21% / 9% / 0%",
+    ),
+    (
+        "dga_helpdesk",
+        "What is the minimum salary for a DGA in 2024?",
+        "helpdesk",
+        ["56.000", "56,000"],
+        False,
+        "RBAC: helpdesk blocked from DGA policy",
+    ),
+    (
+        "dga_inspector",
+        "What is the minimum salary for a DGA in 2024?",
+        "inspector",
+        ["56.000"],
+        True,
+        "DGA salary €56,000 (inspector)",
+    ),
+    (
+        "double_ded",
+        "Can I combine home office and childcare deductions for the same costs?",
+        "helpdesk",
+        ["niet", "dezelfde"],
+        True,
+        "Double deduction prohibited",
+    ),
+    (
+        "kerstarrest",
+        "What did the Hoge Raad rule in the Kerstarrest about Box 3?",
+        "helpdesk",
+        ["2021", "werkelijk", "rechtsherstel"],
+        True,
+        "Kerstarrest Box 3",
+    ),
+    (
+        "hr_2023",
+        "What does ECLI:NL:HR:2023:123 say about home office deductions?",
+        "helpdesk",
+        ["zelfstandigheid", "geweigerd"],
+        True,
+        "HR 2023:123 home office DGA",
+    ),
+    (
+        "box3_rate",
+        "What is the Box 3 tax rate and wealth threshold for 2024?",
+        "helpdesk",
+        ["57.000", "36"],
+        True,
+        "Box 3 rate 36% / €57,000",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Role comparison helper
+# ---------------------------------------------------------------------------
+
+_ROLES = ["helpdesk", "inspector", "legal", "fiod"]
+_ROLE_PILL = {
+    "helpdesk": "pill-helpdesk",
+    "inspector": "pill-inspector",
+    "legal": "pill-legal",
+    "fiod": "pill-fiod",
+}
+
+
+def _render_role_comparison(user_query: str) -> None:
+    st.markdown("---")
+    st.markdown("**Role Comparison** — same query, all four access levels")
+    cols = st.columns(4)
+    for col, r in zip(cols, _ROLES):
+        with col:
+            with st.spinner(f"{r}…"):
+                res = query(user_query, role=r)
+            ans = res.get("answer", "")
+            grade = res.get("grade", "")
+            lat = res.get("latency_ms", 0)
+            cached = res.get("cache_hit", False)
+            cites = res.get("citations", [])
+            col.markdown(
+                f'<span class="role-pill {_ROLE_PILL[r]}">{r.upper()}</span>',
+                unsafe_allow_html=True,
+            )
+            excerpt = ans[:180].rstrip() + ("…" if len(ans) > 180 else "")
+            col.markdown(excerpt or "_No answer returned._")
+            col.caption(
+                f"Grade: {GRADE_BADGE.get(grade, grade)} · "
+                f"{'⚡ cache' if cached else f'{lat} ms'}"
+            )
+            if cites:
+                col.caption("Sources: " + ", ".join(f"`{c[:30]}`" for c in cites[:2]))
+
+
+# ---------------------------------------------------------------------------
+# Pipeline flow diagram helper
+# ---------------------------------------------------------------------------
+
+_FLOW_NODES = ["embed", "cache", "retrieve", "grade", "generate"]
+_FLOW_LABELS = {
+    "embed": "🔢 Embed",
+    "cache": "⚡ Cache",
+    "retrieve": "🔍 Retrieve",
+    "grade": "📊 Grade",
+    "generate": "🤖 Generate",
+}
+
+
+def _flow_html(done: list[str], active: str | None) -> str:
+    parts = []
+    for i, node in enumerate(_FLOW_NODES):
+        if node in done:
+            cls = "fn-done"
+        elif node == active:
+            cls = "fn-active"
+        else:
+            cls = "fn-pending"
+        parts.append(f'<span class="flow-node {cls}">{_FLOW_LABELS[node]}</span>')
+        if i < len(_FLOW_NODES) - 1:
+            parts.append('<span class="flow-arrow">→</span>')
+    return f'<div class="flow-row">{"".join(parts)}</div>'
 
 
 # ---------------------------------------------------------------------------
@@ -517,7 +774,9 @@ st.markdown(
 # Tabs
 # ---------------------------------------------------------------------------
 
-tab_chat, tab_kb = st.tabs(["🤖 Assistant", "📚 Knowledge Base"])
+tab_chat, tab_kb, tab_eval = st.tabs(
+    ["🤖 Assistant", "📚 Knowledge Base", "📊 Evaluation"]
+)
 
 # ---------------------------------------------------------------------------
 # Knowledge Base tab
@@ -600,32 +859,24 @@ with tab_chat:
         user_input = st.session_state.pop("_pending_query")
 
     if user_input:
+        st.session_state["last_query"] = user_input
         st.session_state["messages"].append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
 
         with st.chat_message("assistant"):
 
-            # ── Pipeline status ──────────────────────────────────────────
-            with st.status("Running CRAG pipeline…", expanded=True) as status_box:
+            # ── Live pipeline flow diagram ───────────────────────────────
+            _flow_ph = st.empty()
+            _flow_ph.markdown(_flow_html([], None), unsafe_allow_html=True)
+            _done: list[str] = []
 
-                def _on_step(label: str) -> None:
-                    st.write(STEP_LABELS.get(label, label))
+            def _on_step(label: str) -> None:
+                _flow_ph.markdown(_flow_html(_done, label), unsafe_allow_html=True)
+                _done.append(label)
 
-                result = query_streaming(user_input, role=role, on_step=_on_step)
-
-                if result.get("cache_hit"):
-                    status_box.update(
-                        label="⚡ Cache hit — answer ready",
-                        state="complete",
-                        expanded=False,
-                    )
-                else:
-                    status_box.update(
-                        label="✅ Pipeline complete",
-                        state="complete",
-                        expanded=False,
-                    )
+            result = query_streaming(user_input, role=role, on_step=_on_step)
+            _flow_ph.markdown(_flow_html(_done, None), unsafe_allow_html=True)
 
             # ── Generate answer ──────────────────────────────────────────
             # llama3.1:8b on CPU takes ~20s TTFT; drain generator inside a
@@ -668,6 +919,12 @@ with tab_chat:
                 "latency_ms": latency_ms,
             }
             _render_meta(full_result)
+            if st.button(
+                "🔄 Compare all roles →",
+                key=f"compare_{st.session_state['stats']['total']}",
+                help="Run the same query for all 4 access roles side-by-side",
+            ):
+                st.session_state["show_compare"] = user_input
 
         # ── Update session stats ─────────────────────────────────────────
         s = st.session_state["stats"]
@@ -679,3 +936,176 @@ with tab_chat:
         st.session_state["messages"].append(
             {"role": "assistant", "content": answer, "meta": full_result}
         )
+
+    # ── Role comparison (triggered by "Compare all roles" button) ────────────
+    if st.session_state.get("show_compare"):
+        _render_role_comparison(st.session_state.pop("show_compare"))
+
+# ---------------------------------------------------------------------------
+# Evaluation tab
+# ---------------------------------------------------------------------------
+
+with tab_eval:
+    st.subheader("📊 Pipeline Quality Evaluation")
+    st.caption(
+        "Runs 11 golden test cases covering RBAC enforcement, tax accuracy, "
+        "cache behaviour, and edge cases. Each test checks whether the answer "
+        "contains required keywords (answer tests) or leaks forbidden keywords (RBAC tests)."
+    )
+
+    _ec1, _ec2 = st.columns([1, 6])
+    _run_eval = _ec1.button(
+        "▶ Run evaluation", type="primary", disabled=not bool(_cfg.LLM_API_KEY)
+    )
+    if _ec2.button("🗑️ Clear results", key="eval_clear"):
+        st.session_state["eval_results"] = None
+
+    if not bool(_cfg.LLM_API_KEY):
+        st.warning(
+            "Configure your Groq API key in the sidebar to run evaluation.", icon="🔑"
+        )
+
+    if _run_eval:
+        _eval_results: list[dict] = []
+        _prog = st.progress(0, text="Starting evaluation…")
+        _status_ph = st.empty()
+
+        for _ei, (_tid, _q, _r, _kws, _should, _lbl) in enumerate(EVAL_CASES):
+            _prog.progress(
+                (_ei + 1) / len(EVAL_CASES),
+                text=f"[{_ei + 1}/{len(EVAL_CASES)}] {_lbl}",
+            )
+            _status_ph.info(f"Running: **{_lbl}** — role: `{_r}`")
+
+            _t0 = time.time()
+            _res = query(_q, role=_r)
+            _elapsed = _res.get("latency_ms", round((time.time() - _t0) * 1000))
+            _ans = _res.get("answer", "").lower()
+            _cached = _res.get("cache_hit", False)
+            _grade = _res.get("grade", "?")
+
+            if not _should:
+                _leaked = [kw for kw in _kws if kw.lower() in _ans]
+                _passed = len(_leaked) == 0
+                _accuracy = 1.0 if _passed else 0.0
+                _note = "No leak ✓" if _passed else f"Leaked: {_leaked}"
+            else:
+                _found = [kw for kw in _kws if kw.lower() in _ans]
+                _accuracy = len(_found) / len(_kws) if _kws else 1.0
+                _passed = _accuracy >= 1.0
+                _note = f"Found {len(_found)}/{len(_kws)} keywords"
+
+            _eval_results.append(
+                {
+                    "id": _tid,
+                    "label": _lbl,
+                    "query": _q,
+                    "role": _r,
+                    "passed": _passed,
+                    "accuracy": _accuracy,
+                    "elapsed": _elapsed,
+                    "cached": _cached,
+                    "grade": _grade,
+                    "note": _note,
+                    "answer": _res.get("answer", ""),
+                }
+            )
+            if not _cached:
+                time.sleep(2)  # stay under Groq free-tier TPM
+
+        _prog.empty()
+        _status_ph.empty()
+        st.session_state["eval_results"] = _eval_results
+
+    if st.session_state["eval_results"]:
+        _ev = st.session_state["eval_results"]
+
+        # ── Aggregate metrics ────────────────────────────────────────────
+        _n_pass = sum(1 for r in _ev if r["passed"])
+        _n_cache = sum(1 for r in _ev if r["cached"])
+        _ev_lats = [r["elapsed"] for r in _ev if not r["cached"]]
+        _avg_ev_lat = round(sum(_ev_lats) / len(_ev_lats)) if _ev_lats else 0
+        _rbac_ok = all(
+            r["passed"]
+            for r in _ev
+            if r["id"]
+            in (
+                "rbac_block",
+                "rbac_allow",
+                "dga_helpdesk",
+                "dga_inspector",
+            )  # noqa: E501
+        )
+
+        _m1, _m2, _m3, _m4 = st.columns(4)
+        _m1.metric(
+            "Tests passed",
+            f"{_n_pass}/{len(_ev)}",
+            delta=f"{round(_n_pass / len(_ev) * 100)}%",
+        )
+        _m2.metric("Cache hits", f"{_n_cache}/{len(_ev)}")
+        _m3.metric("Avg latency", f"{_avg_ev_lat} ms")
+        _m4.metric("RBAC tests", "✓ All pass" if _rbac_ok else "✗ Failures")
+
+        st.divider()
+
+        # ── Results table ────────────────────────────────────────────────
+        _rows = []
+        for _r in _ev:
+            _vhtml = (
+                '<span style="color:#1A6B3A;font-weight:700">PASS</span>'
+                if _r["passed"]
+                else '<span style="color:#8B1A1A;font-weight:700">FAIL</span>'
+            )
+            _acc = round(_r["accuracy"] * 100)
+            _bc = "#1A6B3A" if _acc == 100 else ("#7A5800" if _acc >= 60 else "#8B1A1A")
+            _lat_str = "⚡ cache" if _r["cached"] else f"{_r['elapsed']} ms"
+            _rows.append(
+                f"<tr style='border-bottom:1px solid #E8E4DC'>"
+                f"<td style='padding:7px 10px'>{_vhtml}</td>"
+                f"<td style='padding:7px 10px;font-size:0.8rem'>{_r['label']}</td>"
+                f"<td style='padding:7px 10px'>"
+                f"<div style='font-size:0.7rem;color:#666;margin-bottom:2px'>{_acc}%</div>"
+                f"<div style='background:#E8E4DC;border-radius:3px;height:5px'>"
+                f"<div style='width:{_acc}%;height:5px;border-radius:3px;background:{_bc}'></div>"
+                f"</div></td>"
+                f"<td style='padding:7px 10px'>"
+                f"<span style='background:#EEE8DC;border-radius:2px;padding:1px 6px;"
+                f"font-size:0.73rem;color:#3A4A5A'>{_r['role']}</span></td>"
+                f"<td style='padding:7px 10px;font-size:0.75rem;color:#4A6A8A'>{_lat_str}</td>"
+                f"<td style='padding:7px 10px;font-size:0.73rem;color:#666'>{_r['note']}</td>"
+                f"</tr>"
+            )
+
+        st.markdown(
+            f"""
+<table style="width:100%;border-collapse:collapse;font-family:sans-serif;
+              background:#fff;border:1px solid #D8D2C4;border-radius:4px;overflow:hidden">
+<thead>
+  <tr style="background:#1E3A5F;color:#fff">
+    <th style="padding:9px 10px;text-align:left;font-size:0.78rem;font-weight:600">Verdict</th>
+    <th style="padding:9px 10px;text-align:left;font-size:0.78rem;font-weight:600">Test case</th>
+    <th style="padding:9px 10px;text-align:left;font-size:0.78rem;font-weight:600">Accuracy</th>
+    <th style="padding:9px 10px;text-align:left;font-size:0.78rem;font-weight:600">Role</th>
+    <th style="padding:9px 10px;text-align:left;font-size:0.78rem;font-weight:600">Latency</th>
+    <th style="padding:9px 10px;text-align:left;font-size:0.78rem;font-weight:600">Notes</th>
+  </tr>
+</thead>
+<tbody>{"".join(_rows)}</tbody>
+</table>""",
+            unsafe_allow_html=True,
+        )
+
+        st.divider()
+        st.markdown(
+            "**Answer details** — expand each test to inspect the full response"
+        )
+        for _r in _ev:
+            _icon = "✅" if _r["passed"] else "❌"
+            with st.expander(f"{_icon} {_r['label']}  ({_r['role']})", expanded=False):
+                st.caption(f"Query: *{_r['query']}*")
+                _excerpt = _r["answer"][:500] + ("…" if len(_r["answer"]) > 500 else "")
+                st.markdown(_excerpt or "_No answer returned._")
+                st.caption(
+                    f"Grade: **{_r['grade']}** · Latency: **{_r['elapsed']} ms** · {_r['note']}"
+                )

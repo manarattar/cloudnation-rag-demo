@@ -190,4 +190,107 @@ DOCUMENTS = [
             "Tabel I en Tabel II bij de Wet OB 1968."
         ),
     },
+    {
+        "doc_id": "IB2024-box2",
+        "doc_type": "legislation",
+        "doc_title": "Wet Inkomstenbelasting 2024",
+        "article": "Artikel 4.6",
+        "paragraph": "Box 2 aanmerkelijk belang",
+        "classification": "public",
+        "access_roles": ["*"],
+        "text": (
+            "Artikel 4.6 — Belastbaar inkomen uit aanmerkelijk belang (box 2) 2024. "
+            "Tarief box 2: 24,5% over de eerste € 67.000 winst uit aanmerkelijk belang. "
+            "Tarief box 2: 33% over het meerdere boven € 67.000. "
+            "Aanmerkelijk belang: belastingplichtige bezit direct of indirect ≥5% van de "
+            "aandelen, winstbewijzen of stemrechten in een vennootschap. "
+            "Fiscale partners mogen hun aanmerkelijk belang samenvoegen voor de grens "
+            "van € 67.000. Reguliere voordelen (dividenden) en vervreemdingsvoordelen "
+            "(winst bij verkoop) worden beide belast in box 2."
+        ),
+    },
+    {
+        "doc_id": "EU-VAT-2006-112",
+        "doc_type": "legislation",
+        "doc_title": "EU BTW-Richtlijn 2006/112/EG",
+        "article": "Artikel 96-99",
+        "paragraph": "Standaard- en verlaagde tarieven",
+        "classification": "public",
+        "access_roles": ["*"],
+        "text": (
+            "EU BTW-Richtlijn 2006/112/EG, Artikelen 96-99 — VAT standard and reduced rates. "
+            "Article 96: Member States shall apply a standard rate of VAT of at least 15%. "
+            "The Netherlands applies 21% as standard rate (hoog tarief). "
+            "Article 98: Member States may apply one or two reduced rates of not less than 5% "
+            "to supplies of goods or services in Annex III. "
+            "The Netherlands applies 9% reduced rate (laag tarief) to food, medicine, books. "
+            "Article 109: Zero-rate (0%) with right to deduct input VAT applies to exports "
+            "outside the EU and intra-Community supplies (intracommunautaire leveringen). "
+            "Belastingdienst-note: Dutch rates are fully compliant with EU minima; "
+            "any future rate change requires amendment of both the EU directive and the "
+            "Dutch Wet OB 1968."
+        ),
+    },
+    {
+        "doc_id": "AOW-2024",
+        "doc_type": "e_learning",
+        "doc_title": "E-learning module: AOW en pensioen voor helpdesk",
+        "article": "Module 5",
+        "paragraph": "Staatspensioentoeslag en belastingheffing",
+        "classification": "public",
+        "access_roles": ["*"],
+        "text": (
+            "E-learning Module 5 — AOW (Algemene Ouderdomswet) en belasting 2024. "
+            "AOW-leeftijd: 67 jaar in 2024. "
+            "Bruto AOW-uitkering (alleenstaande): € 1.408,49 per maand. "
+            "Bruto AOW-uitkering (gehuwden/samenwonenden): € 963,52 per persoon per maand. "
+            "AOW-uitkeringen zijn belastbaar als loon uit vroegere dienstbetrekking (box 1). "
+            "AOW-gerechtigden betalen een verlaagd box 1 tarief: 19,07% over schijf 1 "
+            "(tot € 40.021), 36,97% over schijf 2 (€ 40.021 – € 75.518), "
+            "49,50% over het meerdere. "
+            "Geen AOW-premie verschuldigd na het bereiken van de AOW-leeftijd. "
+            "Heffingskortingen: AOW-gerechtigden ontvangen de ouderenkorting (€ 1.925 in 2024)."
+        ),
+    },
+    {
+        "doc_id": "DGA-DIVIDEND-2024",
+        "doc_type": "policy",
+        "doc_title": "Intern Beleid: DGA Dividenduitkeringen en gebruikelijk loon 2024",
+        "article": "Sectie 6.1",
+        "paragraph": "Dividendbelasting en box 2 samenhang",
+        "classification": "restricted",
+        "access_roles": ["restricted", "legal_classified", "fiod"],
+        "text": (
+            "Intern beleid sectie 6.1 — DGA dividenduitkeringen (2024). "
+            "Inspecteurs dienen te beoordelen of een DGA dividend uitkeert vóórdat het "
+            "gebruikelijk loon is vastgesteld — dit is een veelvoorkomend ontwijkingspatroon. "
+            "Controleer: (1) Is het gebruikelijk loon minimaal € 56.000 vastgesteld? "
+            "(2) Zijn dividenduitkeringen proportioneel aan het aandelenbezit? "
+            "(3) Heeft de DGA box 2 belasting (24,5%/33%) correct aangegeven? "
+            "Risico-indicator: DGA met hoog dividend maar laag gebruikelijk loon wijst op "
+            "belastingontwijking via arbeidsinkomsten omzetten naar box 2-tarief. "
+            "Actie: stel naheffing in als het totale voordeel meer dan € 15.000 bedraagt."
+        ),
+    },
+    {
+        "doc_id": "FIOD-MEMO-2024-02",
+        "doc_type": "policy",
+        "doc_title": "FIOD Handhavingsmemo — Crypto en digitale activa 2024",
+        "article": "Memo 2024-02",
+        "paragraph": "Belastingontduiking via crypto",
+        "classification": "fiod",
+        "access_roles": ["fiod"],
+        "text": (
+            "FIOD Handhavingsmemo 2024-02 — Crypto-activa en belastingontduiking. "
+            "STRIKT VERTROUWELIJK — uitsluitend voor FIOD-rechercheurs. "
+            "Signaalindicatoren: grote crypto-transacties niet opgegeven in box 3, "
+            "gebruik van mixers/tumblers om herkomst te verhullen, "
+            "off-chain transacties via peer-to-peer platforms zonder KYC. "
+            "Opsporingsmethode: koppeling aangiftedata met blockchain-analysetools "
+            "(Chainalysis, Elliptic). Drempelwaarde voor onderzoek: niet-aangegeven "
+            "crypto-vermogen > € 25.000 of vermoedens van witwassen. "
+            "Samenwerking: FIOD werkt samen met FIU-NL voor meldingen ongebruikelijke "
+            "transacties. Interne classificatie: STRIKT VERTROUWELIJK."
+        ),
+    },
 ]
