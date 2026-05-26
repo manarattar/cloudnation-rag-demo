@@ -270,27 +270,27 @@ def grade_retrieval(query: str, chunks: list[dict]) -> str:
 # Generation
 # ---------------------------------------------------------------------------
 
-GENERATION_PROMPT = """You are a precise assistant for the Dutch (Netherlands) tax authority.
-Answer the question COMPLETELY and DIRECTLY using ONLY the provided context.
-Rules:
-- Always answer in English.
-- Write all decimal numbers using period notation (e.g. 36.97%, not 36,97%).
-- Lead with the most important fact that directly answers the question.
-- Cover ALL relevant rates, thresholds, and rules mentioned in the context.
-- After every factual claim add an inline citation: [Document Title, Article].
-- If the context does not contain an answer, say so clearly — do not guess.
+GENERATION_PROMPT = """Je bent een nauwkeurige assistent voor de Nederlandse Belastingdienst.
+Beantwoord de vraag VOLLEDIG en DIRECT op basis van UITSLUITEND de verstrekte context.
+Regels:
+- Antwoord ALTIJD in het Nederlands.
+- Schrijf decimale getallen met een komma (bijv. 36,97%, niet 36.97%).
+- Begin met het belangrijkste feit dat de vraag direct beantwoordt.
+- Behandel ALLE relevante tarieven, drempelwaarden en regels uit de context.
+- Voeg na elke feitelijke bewering een inline-citaat toe: [Documenttitel, Artikel].
+- Als de context geen antwoord bevat, zeg dat dan duidelijk — gok niet.
 
 Context:
 {context}
 
-Question: {query}
+Vraag: {query}
 
-Answer:"""
+Antwoord:"""
 
 NO_ANSWER_TEMPLATE = (
-    "Based on the available documents, this question cannot be answered with certainty. "
-    "The closest relevant source is: [{citation}]. "
-    "Please consult the relevant legislation directly or contact a tax inspector."
+    "Op basis van de beschikbare documenten kan deze vraag niet met zekerheid worden beantwoord. "
+    "De meest relevante bron is: [{citation}]. "
+    "Raadpleeg de relevante wetgeving rechtstreeks of neem contact op met een belastinginspecteur."
 )
 
 
@@ -310,8 +310,8 @@ def generate_answer(query: str, chunks: list[dict]) -> tuple[str, list[str]]:
 
 def rewrite_query(query: str) -> str:
     prompt = (
-        f"Rewrite this Dutch tax query using more specific legal terminology "
-        f"or article references. Return only the rewritten query.\n\nQuery: {query}"
+        f"Herschrijf deze Nederlandse belastingvraag met specifiekere juridische terminologie "
+        f"of wetsartikelverwijzingen. Geef alleen de herschreven vraag terug.\n\nVraag: {query}"
     )
     try:
         return _llm_chat(prompt, max_tokens=100)

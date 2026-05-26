@@ -516,31 +516,39 @@ def _render_meta(meta: dict) -> None:
     citations = meta.get("citations", [])
     chunks = meta.get("chunks", [])
 
-    # ── Confidence badge ─────────────────────────────────────────────
-    top_score = chunks[0].get("score", 0) if chunks else 0.0
-    if grade in ("irrelevant", "ambiguous") or top_score < 0.2:
-        conf_level, conf_cls = "LOW", "conf-low"
-    elif top_score >= 0.5:
-        conf_level, conf_cls = "HIGH", "conf-high"
-    else:
-        conf_level, conf_cls = "MEDIUM", "conf-medium"
-    if cache_hit:
-        conf_level, conf_cls = "CACHED", "conf-high"
-
-    st.markdown(
-        f'<span class="conf-badge {conf_cls}">Confidence: {conf_level}</span>',
-        unsafe_allow_html=True,
+    # Single-line status always visible
+    grade_label = GRADE_BADGE.get(grade, grade)
+    status_line = (
+        f"⚡ **Cache hit** · {latency} ms"
+        if cache_hit
+        else f"{grade_label} · {latency} ms"
     )
+    st.caption(status_line)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Retrieval grade", GRADE_BADGE.get(grade, grade))
-    col2.metric("Cache", "HIT ⚡" if cache_hit else "MISS")
-    col3.metric("Latency", f"{latency} ms")
+    # Everything else collapsed into one expander
+    with st.expander("🔍 Pipeline details", expanded=False):
+        top_score = chunks[0].get("score", 0) if chunks else 0.0
+        if grade in ("irrelevant", "ambiguous") or top_score < 0.2:
+            conf_level, conf_cls = "LOW", "conf-low"
+        elif top_score >= 0.5:
+            conf_level, conf_cls = "HIGH", "conf-high"
+        else:
+            conf_level, conf_cls = "MEDIUM", "conf-medium"
+        if cache_hit:
+            conf_level, conf_cls = "CACHED", "conf-high"
+        st.markdown(
+            f'<span class="conf-badge {conf_cls}">Confidence: {conf_level}</span>',
+            unsafe_allow_html=True,
+        )
 
-    if citations:
-        with st.expander("📚 Sources cited", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Retrieval grade", GRADE_BADGE.get(grade, grade))
+        col2.metric("Cache", "HIT ⚡" if cache_hit else "MISS")
+        col3.metric("Latency", f"{latency} ms")
+
+        if citations:
+            st.markdown("**Sources cited**")
             if chunks and not cache_hit:
-                # Show score bars alongside citations
                 chunk_by_cite = {c.get("citation", ""): c for c in chunks}
                 for c in citations:
                     sc = chunk_by_cite.get(c, {}).get("score", 0.0)
@@ -557,8 +565,8 @@ def _render_meta(meta: dict) -> None:
                 for c in citations:
                     st.markdown(f"- `{c}`")
 
-    if chunks and not cache_hit:
-        with st.expander("🔍 Retrieved chunks", expanded=False):
+        if chunks and not cache_hit:
+            st.markdown("**Retrieved chunks**")
             for i, chunk in enumerate(chunks[:5], 1):
                 score = chunk.get("score", 0)
                 citation = chunk.get("citation", "")
@@ -617,7 +625,7 @@ EVAL_CASES = [
         "rbac_block",
         "Tell me about FIOD fraud indicators and VAT carousel schemes.",
         "helpdesk",
-        ["carrousel", "fraude", "50.000"],
+        ["50.000", "rode vlag"],
         False,
         "RBAC: helpdesk blocked from FIOD doc",
     ),
@@ -633,15 +641,15 @@ EVAL_CASES = [
         "box1_rates",
         "What is the Box 1 income tax rate for 2024?",
         "helpdesk",
-        ["36.97", "49.50", "75"],
+        ["36,97", "49,50", "75"],
         True,
-        "Box 1 tax rates (36.97% / 49.50%)",
+        "Box 1 tax rates (36,97% / 49,50%)",
     ),
     (
         "box1_cache",
         "What is the Box 1 income tax rate for 2024?",
         "helpdesk",
-        ["36.97", "49.50"],
+        ["36,97", "49,50"],
         True,
         "Box 1 cache hit",
     ),
@@ -758,16 +766,25 @@ _FLOW_LABELS = {
 }
 
 
-def _flow_html(done: list[str], active: str | None) -> str:
+def _flow_html(done: list[str], active: str | None, timings: dict | None = None) -> str:
+    """Animated pipeline diagram. When `timings` is provided, completed nodes show ms."""
     parts = []
     for i, node in enumerate(_FLOW_NODES):
         if node in done:
             cls = "fn-done"
+            ms = timings.get(node) if timings else None
+            label = (
+                f"{_FLOW_LABELS[node]} <small>{ms}ms</small>"
+                if ms
+                else _FLOW_LABELS[node]
+            )
         elif node == active:
             cls = "fn-active"
+            label = _FLOW_LABELS[node]
         else:
             cls = "fn-pending"
-        parts.append(f'<span class="flow-node {cls}">{_FLOW_LABELS[node]}</span>')
+            label = _FLOW_LABELS[node]
+        parts.append(f'<span class="flow-node {cls}">{label}</span>')
         if i < len(_FLOW_NODES) - 1:
             parts.append('<span class="flow-arrow">→</span>')
     return f'<div class="flow-row">{"".join(parts)}</div>'
@@ -1032,7 +1049,7 @@ with tab_chat:
                     icon="🔒",
                 )
 
-            # ── Latency waterfall ────────────────────────────────────────
+            # ── Update flow diagram with per-step timings ────────────────
             if _step_times and not result.get("cache_hit"):
                 _step_ms: dict = {}
                 for _si, (_sn, _st) in enumerate(_step_times):
@@ -1051,11 +1068,8 @@ with tab_chat:
                     _step_ms["generate"] = round(
                         (_t_done - _step_times[_gen_idx][1]) * 1000
                     )
-                _t0_val = result.get("t0") or (_t_done - sum(_step_ms.values()) / 1000)
-                _total_lat = round((_t_done - _t0_val) * 1000)
-                st.markdown(
-                    _latency_waterfall_html(_step_ms, _total_lat),
-                    unsafe_allow_html=True,
+                _flow_ph.markdown(
+                    _flow_html(_done, None, _step_ms), unsafe_allow_html=True
                 )
 
             # ── Cache result after streaming ─────────────────────────────

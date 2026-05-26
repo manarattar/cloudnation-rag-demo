@@ -61,7 +61,7 @@ CASES = [
         "rbac_block",
         "Tell me about FIOD fraud indicators and VAT carousel schemes.",
         "helpdesk",
-        ["carrousel", "fraude", "50.000", "rode vlag"],  # must NOT appear
+        ["50.000", "rode vlag"],  # must NOT appear — doc-specific, not in query
         False,
         "RBAC: helpdesk blocked from FIOD classified doc",
     ),
@@ -79,16 +79,16 @@ CASES = [
         "box1_rates",
         "What is the Box 1 income tax rate for 2024?",
         "helpdesk",
-        ["36.97", "49.50", "75"],  # 36.97%, 49.50%, threshold €75k
+        ["36,97", "49,50", "75"],  # 36,97%, 49,50%, threshold €75k
         True,
-        "Box 1 tax rates (36.97% / 49.50%)",
+        "Box 1 tax rates (36,97% / 49,50%)",
     ),
     # Cache hit — exact repeat of Box 1
     (
         "box1_cache",
         "What is the Box 1 income tax rate for 2024?",
         "helpdesk",
-        ["36.97", "49.50"],
+        ["36,97", "49,50"],
         True,
         "Box 1 cache hit (same query, same role)",
     ),
