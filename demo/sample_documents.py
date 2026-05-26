@@ -139,8 +139,8 @@ DOCUMENTS = [
         "doc_title": "Intern Beleid: Beoordeling DGA-dossiers 2024",
         "article": "Sectie 4.2",
         "paragraph": "Gebruikelijk loon",
-        "classification": "internal",
-        "access_roles": ["inspector", "legal", "fiod"],
+        "classification": "restricted",
+        "access_roles": ["restricted", "legal_classified", "fiod"],
         "text": (
             "Intern beleid sectie 4.2 — Gebruikelijk loon DGA (2024). "
             "Het gebruikelijk loon voor een DGA bedraagt minimaal € 56.000 in 2024 "
@@ -176,7 +176,7 @@ DOCUMENTS = [
         "article": "Module 3",
         "paragraph": "Btw-tarieven en vrijstellingen",
         "classification": "internal",
-        "access_roles": ["helpdesk", "inspector", "legal", "fiod"],
+        "access_roles": ["internal"],
         "text": (
             "E-learning Module 3 — BTW-tarieven en vrijstellingen (2024). "
             "Algemeen tarief: 21%. "

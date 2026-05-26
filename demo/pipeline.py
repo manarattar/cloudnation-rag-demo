@@ -417,7 +417,9 @@ def query(user_query: str, role: str = "helpdesk") -> dict:
     """
     t0 = time.time()
 
+    # Plain vec for cache (exact match); expanded vec for retrieval (cross-lingual)
     query_vec = embed(user_query)
+    expanded_vec = embed(user_query, expand=True)
 
     # 1. Semantic cache check
     cached = cache_lookup(query_vec, role)
@@ -427,7 +429,7 @@ def query(user_query: str, role: str = "helpdesk") -> dict:
         return cached
 
     # 2. Retrieve
-    chunks = retrieve(query_vec, role)
+    chunks = retrieve(expanded_vec, role)
 
     # 3. Grade
     grade = grade_retrieval(user_query, chunks)
