@@ -488,9 +488,9 @@ def grade_retrieval(query: str, chunks: list[dict]) -> str:
     top_score = top.get("score", 0)
     if top_score > 1.0:
         return "relevant"
-    if top_score >= 0.3:
+    if top_score >= 0.25:
         return "relevant"
-    if top_score >= 0.08:
+    if top_score >= 0.07:
         return "ambiguous"
     return "irrelevant"
 
