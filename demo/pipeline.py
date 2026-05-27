@@ -481,7 +481,13 @@ def grade_retrieval(query: str, chunks: list[dict]) -> str:
     """Score-based grader — no LLM call, instant response."""
     if not chunks:
         return "irrelevant"
-    top_score = chunks[0].get("score", 0)
+    top = chunks[0]
+    # After RRF fusion the primary ranking key is rrf_score; fall back to the
+    # original cosine/BM25 score.  BM25 scores > 1.0 indicate strong keyword
+    # overlap and are treated as relevant regardless of the cosine threshold.
+    top_score = top.get("score", 0)
+    if top_score > 1.0:
+        return "relevant"
     if top_score >= 0.3:
         return "relevant"
     if top_score >= 0.08:
@@ -566,7 +572,7 @@ def hyde_embed(query: str) -> list[float]:
 def generate_answer_stream(query: str, chunks: list[dict], out: dict):
     """Streaming answer generator. Yields token strings; populates out['citations']."""
     context = "\n\n---\n\n".join(
-        f"[{c['citation']}]\n{_generation_text(c)[:400]}" for c in chunks[:TOP_K_FINAL]
+        f"[{c['citation']}]\n{_generation_text(c)}" for c in chunks[:TOP_K_FINAL]
     )
     out["citations"] = [c["citation"] for c in chunks[:TOP_K_FINAL]]
     prompt = GENERATION_PROMPT.format(context=context, query=query)
@@ -600,7 +606,12 @@ def query_streaming(
     role: str = "helpdesk",
     on_step=None,
 ) -> dict:
-    """Streaming pipeline: hybrid retrieve → rerank → grade → generate."""
+    """Streaming pipeline: hybrid retrieve → grade → self-heal → rerank → generate.
+
+    Mirrors the full CRAG self-healing loop from query():
+      Attempt 1: rewrite query with legal terminology
+      Attempt 2: HyDE — embed a hypothetical answer document
+    """
 
     def _noop(_):
         pass
@@ -627,6 +638,21 @@ def query_streaming(
 
     on_step("grade")
     grade = grade_retrieval(user_query, chunks)
+
+    # Self-heal attempt 1: rewrite query
+    if grade == "irrelevant":
+        on_step("rewrite")
+        rewritten = rewrite_query(user_query)
+        rewritten_vec = embed(rewritten, expand=True)
+        chunks = hybrid_retrieve(rewritten_vec, rewritten, role)
+        grade = grade_retrieval(rewritten, chunks)
+
+    # Self-heal attempt 2: HyDE
+    if grade == "irrelevant":
+        on_step("hyde")
+        hyde_vec = hyde_embed(user_query)
+        chunks = hybrid_retrieve(hyde_vec, user_query, role)
+        grade = grade_retrieval(user_query, chunks)
 
     out: dict = {"citations": []}
 

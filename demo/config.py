@@ -25,7 +25,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 # v3: parent-child chunking + hybrid BM25 retrieval + cross-encoder reranker
-COLLECTION = "tax_authority_demo_v3"
+COLLECTION = "tax_authority_demo_v4"
 
 # Persistent HNSW index — survives restarts, scales to 500K+ docs.
 # Falls back to :memory: if the path is not writable (e.g. read-only container).
