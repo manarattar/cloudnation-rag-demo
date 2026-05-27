@@ -697,7 +697,7 @@ EVAL_CASES = [
         "hr_2023",
         "What does ECLI:NL:HR:2023:123 say about home office deductions?",
         "helpdesk",
-        ["zelfstandigheid", "geweigerd"],
+        ["zelfstandigheid", "aftrek"],
         True,
         "HR 2023:123 home office DGA",
     ),

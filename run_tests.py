@@ -142,7 +142,7 @@ CASES = [
         "hr_2023_homeoffice",
         "What does ECLI:NL:HR:2023:123 say about home office deductions?",
         "helpdesk",
-        ["zelfstandigheid", "geweigerd"],
+        ["zelfstandigheid", "aftrek"],
         True,
         "HR 2023:123 — DGA home office deduction refused",
     ),
